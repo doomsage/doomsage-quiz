@@ -1,0 +1,126 @@
+{
+ "id": "aromatic-esr",
+ "title": "Aromatic ESR - JEE Main PYQs",
+ "questions": [
+  {
+   "badge": "JEE Main 2026 - 05 Apr S1",
+   "q": "For the Friedel-Crafts alkylation of benzene with 1-chloropropane and anhydrous AlCl3, which statements are correct?\nA. Major product is n-propylbenzene.\nB. Isopropyl carbocation intermediate is also generated.\nC. Multiple substitution is inevitable.\nD. Introducing an electron-donating substituent on benzene will not produce any alkylbenzene.",
+   "options": [
+    "A and D only",
+    "B and C only",
+    "A and C only",
+    "B and D only"
+   ],
+   "answer": 1,
+   "explain": "The 1° carbocation rearranges to isopropyl, so the major product is isopropylbenzene. The alkyl product is more reactive, so polysubstitution happens."
+  },
+  {
+   "badge": "JEE Main 2026 - 28 Jan S2",
+   "q": "The presence of a -NO2 group in a benzene ring:\nA. activates the ring towards electrophilic substitutions.\nB. deactivates the ring towards electrophilic substitutions.\nC. activates the ring towards nucleophilic substitutions.\nD. deactivates the ring towards nucleophilic substitutions.",
+   "options": [
+    "C and A only",
+    "B and C only",
+    "A and D only",
+    "B and D only"
+   ],
+   "answer": 1,
+   "explain": "NO2 withdraws electrons by -M and -I: it deactivates the ring for EAS and makes nucleophilic substitution easier."
+  },
+  {
+   "badge": "JEE Main 2021 - 20 Jul S2",
+   "q": "Benzene on nitration gives nitrobenzene in the presence of HNO3 and H2SO4 mixture, where:",
+   "options": [
+    "both H2SO4 and HNO3 act as bases",
+    "HNO3 acts as an acid and H2SO4 as a base",
+    "both act as acids",
+    "HNO3 acts as a base and H2SO4 as an acid"
+   ],
+   "answer": 3,
+   "explain": "H2SO4 protonates HNO3, which loses water to form NO2+. The proton acceptor (HNO3) is the base here."
+  },
+  {
+   "badge": "JEE Main 2021 - 25 Feb S2",
+   "q": "The correct sequence of reagents used in the preparation of 4-bromo-2-nitroethylbenzene from benzene is:",
+   "options": [
+    "CH3COCl/AlCl3, Br2/AlBr3, HNO3/H2SO4, Zn/HCl",
+    "CH3COCl/AlCl3, Zn-Hg/HCl, Br2/AlBr3, HNO3/H2SO4",
+    "HNO3/H2SO4, Br2/AlCl3, CH3COCl/AlCl3, Zn-Hg/HCl",
+    "Br2/AlBr3, CH3COCl/AlCl3, HNO3/H2SO4, Zn/HCl"
+   ],
+   "answer": 1,
+   "explain": "Acylate first (no rearrangement), Clemmensen-reduce to ethyl (o/p director), brominate para, then nitration goes ortho to ethyl."
+  },
+  {
+   "badge": "JEE Main 2019 - 08 Apr S2",
+   "q": "Polysubstitution is a major drawback in:",
+   "options": [
+    "Reimer-Tiemann reaction",
+    "Friedel-Crafts alkylation",
+    "Acetylation of aniline",
+    "Friedel-Crafts acylation"
+   ],
+   "answer": 1,
+   "explain": "The alkyl product is more reactive than benzene, so it keeps reacting. Acylation products are deactivated, so it stops at one."
+  },
+  {
+   "badge": "JEE Main 2013 - 22 Apr",
+   "q": "Which of the following would not give 2-phenylbutane as the major product in a Friedel-Crafts reaction?",
+   "options": [
+    "1-butene + HF",
+    "2-butanol + H2SO4",
+    "Butanoyl chloride + AlCl3, then Zn/HCl",
+    "Butyl chloride + AlCl3"
+   ],
+   "answer": 2,
+   "explain": "Acylation then reduction gives butylbenzene (1-phenylbutane). The others form the secondary butyl cation, giving 2-phenylbutane."
+  },
+  {
+   "badge": "JEE Main 2008",
+   "q": "Toluene is nitrated and the product is reduced with Sn/HCl. The product is diazotised and then heated with cuprous bromide. The reaction mixture contains:",
+   "options": [
+    "a mixture of o- and p-bromotoluenes",
+    "a mixture of o- and p-dibromobenzenes",
+    "a mixture of o- and p-bromoanilines",
+    "a mixture of o- and m-bromotoluenes"
+   ],
+   "answer": 0,
+   "explain": "CH3 directs nitration o/p. NO2 → NH2 → N2+ → Br keeps the position, giving o- and p-bromotoluene."
+  },
+  {
+   "badge": "JEE Main 2007",
+   "q": "Presence of a nitro group in a benzene ring:",
+   "options": [
+    "activates the ring towards electrophilic substitution",
+    "renders the ring basic",
+    "deactivates the ring towards nucleophilic substitution",
+    "deactivates the ring towards electrophilic substitution"
+   ],
+   "answer": 3,
+   "explain": "NO2 is a strong -M/-I withdrawer, so electrophilic substitution slows down a lot."
+  },
+  {
+   "badge": "JEE Main 2007",
+   "q": "The reaction of toluene with Cl2 in the presence of FeCl3 gives predominantly:",
+   "options": [
+    "benzoyl chloride",
+    "benzyl chloride",
+    "o- and p-chlorotoluene",
+    "m-chlorotoluene"
+   ],
+   "answer": 2,
+   "explain": "FeCl3 makes it ring EAS (not side-chain), and CH3 is o/p directing."
+  },
+  {
+   "badge": "JEE Main 2021 - 24 Feb S2",
+   "q": "What is the correct sequence of reagents used for converting nitrobenzene into m-dibromobenzene?",
+   "options": [
+    "Sn/HCl → KBr → Br2 → H+",
+    "Br2/Fe → Sn/HCl → NaNO2/HCl → CuBr/HBr",
+    "NaNO2 → HCl → KBr → H+",
+    "Sn/HCl → Br2 → NaNO2 → NaBr"
+   ],
+   "answer": 1,
+   "explain": "NO2 is meta directing, so brominate first. Then reduce to aniline, diazotise, and Sandmeyer swaps N2+ for Br at that same position."
+  }
+ ]
+}
