@@ -70,10 +70,15 @@ const ot=o=>typeof o==='string'?o:(o.text||'(see image)');
 const brand='<div class="brand"><i></i>DOOMSAGE QUIZ</div>';
 async function home(){
   const sets=await (await fetch('catalog.json')).json();
+  let mine=[];try{mine=JSON.parse(localStorage.getItem('dq-custom-sets')||'[]')}catch(e){}
   app.innerHTML=`<div class="view">${brand}<h1>Pick a set</h1><p class="sub">Tap an option, get the answer instantly.</p>`+
+  `<button class="set" id="cv"><span class="tag">NEW</span><b>Paper to quiz</b><span>Upload a question paper PDF - AI builds a playable quiz</span><div class="go">→</div></button>`+
+  mine.map(s=>`<button class="set" data-my="${s.id}"><span class="tag" style="background:#3a3a2a;color:var(--cream)">My papers</span><b>${esc(s.title)}</b><span>${esc(s.subtitle||'')} · ${s.count} questions</span><div class="go">→</div></button>`).join('')+
   sets.map(s=>`<button class="set" data-f="${[].concat(s.file).join(',')}"><span class="tag">${s.tag}</span><b>${esc(s.title)}</b><span>${esc(s.subtitle)} · ${[].concat(s.file).length>0?s.count:s.count} questions</span><div class="go">→</div></button>`).join('')+
   '<div class="credit">DOOMSAGE</div></div>';
-  document.querySelectorAll('.set').forEach(b=>b.onclick=async()=>{const fs=b.dataset.f.split(',');const parts=await Promise.all(fs.map(f=>fetch(f).then(r=>r.json())));set={...parts[0],questions:parts.flatMap(p=>p.questions)};i=0;ans=[];show()});
+  $('#cv').onclick=()=>location.href='convert.html';
+  document.querySelectorAll('[data-my]').forEach(b=>b.onclick=()=>location.href='convert.html?set='+b.dataset.my);
+  document.querySelectorAll('[data-f]').forEach(b=>b.onclick=async()=>{const fs=b.dataset.f.split(',');const parts=await Promise.all(fs.map(f=>fetch(f).then(r=>r.json())));set={...parts[0],questions:parts.flatMap(p=>p.questions)};i=0;ans=[];show()});
 }
 function show(){
   locked=false;const q=set.questions[i],n=set.questions.length;
