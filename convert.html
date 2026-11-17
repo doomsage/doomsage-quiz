@@ -74,6 +74,7 @@ h1{font-size:30px;margin:0 0 6px;line-height:1.15}
 #zm{position:fixed;inset:0;background:rgba(0,0,0,.92);display:none;align-items:center;justify-content:center;z-index:9;padding:14px}
 #zm img{max-width:100%;max-height:100%;background:#fff;border-radius:10px;padding:8px}
 .sw{font-variant-numeric:tabular-nums;font-size:13px;font-weight:700;color:#000;background:var(--gold);border-radius:99px;padding:4px 10px;min-width:52px;text-align:center}.sw.done{background:#3a3a2a;color:var(--cream)}.sj{margin-bottom:12px}.sjh{display:flex;justify-content:space-between;gap:8px;font-size:14px}.sjh span{color:#a9a98a;font-size:12px}.sjb{height:6px;background:#3a1414;border-radius:9px;overflow:hidden;margin-top:5px}.sjb div{height:100%;background:var(--ok)}
+.qa{display:flex;flex-direction:column;min-height:calc(100vh - 230px)}.qa.inv .qblk{order:2;margin-top:auto;padding-top:18px}.qa.inv .oblk{order:1}
 .credit{text-align:center;font-size:11px;letter-spacing:.3em;color:#8a6f1c;margin-top:34px}
 </style></head><body><div id="app"></div><div id="zm"><img alt=""></div>
 <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
@@ -83,6 +84,7 @@ h1{font-size:30px;margin:0 0 6px;line-height:1.15}
 if(window.pdfjsLib)pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 const $=s=>document.querySelector(s),app=$('#app');
 const L=['A','B','C','D'];
+let inv=false;try{inv=localStorage.getItem('dq-inv')==='1'}catch(e){}
 let times=[],qStart=0,tick=null;
 function fmtSw(ms){const s=Math.floor(ms/1000);return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')}
 function fmtT(ms){if(!ms||ms<0)return '0s';const s=Math.round(ms/1000);if(s<60)return s+'s';return Math.floor(s/60)+'m '+(s%60)+'s'}
@@ -257,15 +259,17 @@ async function saveOffline(btn){
 function show(){
   locked=false;const q=set.questions[i],n=set.questions.length;
   const letters=L.slice(0,q.options?q.options.length:0);
-  app.innerHTML=`<div class="view"><div class="top"><button class="x" id="quit">✕</button><div class="bar"><div style="width:${i/n*100}%"></div></div><div class="sw" id="sw">0:00</div><div class="cnt">${i+1}/${n}</div></div>
-  <span class="badge">${esc(q.badge)}</span><p class="q">${esc(q.q)}</p>
+  app.innerHTML=`<div class="view"><div class="top"><button class="x" id="quit">✕</button><div class="bar"><div style="width:${i/n*100}%"></div></div><div class="sw" id="sw">0:00</div><button class="x" id="inv" title="Swap question and options">⇅</button><div class="cnt">${i+1}/${n}</div></div>
+  <div class="qa${inv?' inv':''}"><div class="qblk"><span class="badge">${esc(q.badge)}</span><p class="q">${esc(q.q)}</p>
   ${q.figure&&q.page?`<button class="figbtn" id="fig">See figure (page ${q.page})</button>`:''}
+</div><div class="oblk">
   ${q.numeric?`<input class="numin" id="numin" inputmode="decimal" autocomplete="off" placeholder="Type your answer (number)">`
     :q.options.map((o,k)=>`<button class="opt" data-k="${k}"><em>${letters[k]}</em><span>${esc(o)}</span></button>`).join('')}
-  <div id="ex"></div><div class="credit">DOOMSAGE</div></div>
+  <div id="ex"></div></div></div><div class="credit">DOOMSAGE</div></div>
   <div class="foot" id="ft"><button class="btn" id="nx" ${q.numeric?'':'style="display:none"'}>${q.numeric?'Check answer':(i+1<n?'Next question →':'See score')}</button></div>`;
   tex();
   startQ();
+  $('#inv').onclick=()=>{inv=!inv;try{localStorage.setItem('dq-inv',inv?'1':'0')}catch(e){}document.querySelector('.qa').classList.toggle('inv',inv)};
   requestAnimationFrame(()=>{document.querySelector('.bar div').style.width=(i+1)/n*100+'%'});
   $('#quit').onclick=homeConfirm;
   if(q.figure&&q.page)$('#fig').onclick=e=>showFigure(q.page,e.target);
