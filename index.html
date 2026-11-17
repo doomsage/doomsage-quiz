@@ -154,7 +154,7 @@ async function home(){
     try{
       const r=await fetch(API+'/jobs',{signal:AbortSignal.timeout(12000)});if(!r.ok)throw Error('unavailable');const j=await r.json();
       if(!j.items?.length){box.innerHTML='';return}
-      box.innerHTML=H+'BUILDING TESTS</h2>'+j.items.map(q=>`<button class="set" data-job="${q.id}"><span class="tag">${q.count?'Ready to solve':q.status==='paused'?'Paused':'Building'}</span><b>${esc(q.title)}</b><span>${q.progress}% complete · ${q.completed}/${q.total} pages · ${q.count} questions ready</span><span>${q.status==='complete'?'Complete':q.status==='paused'?'Build paused - ready questions remain playable':'More questions are being built in the background'}</span><div class="go">→</div></button>`).join('');
+      box.innerHTML=H+'BUILDING TESTS</h2>'+j.items.map(q=>`<button class="set" data-job="${q.id}"><span class="tag">${q.count?'Ready to solve':q.status==='paused'?'Paused':'Building'}</span><b>${esc(q.title)}</b><span style="display:block">${q.progress}% complete · ${q.completed}/${q.total} pages · ${q.count} questions ready</span><span style="display:block;margin-top:4px">${q.status==='complete'?'Complete':q.status==='paused'?'Build paused - ready questions remain playable':'More questions are being built in the background'}</span><div class="go">→</div></button>`).join('');
       box.querySelectorAll('[data-job]').forEach(b=>b.onclick=()=>location.href='convert.html?job='+b.dataset.job);
     }catch(e){if(!box.children.length)box.innerHTML='<p class="sub" style="font-size:13px">Building tests need the home server. Reconnecting...</p>'}
   }
