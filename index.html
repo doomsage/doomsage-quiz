@@ -68,15 +68,27 @@ const imgs=v=>v?(Array.isArray(v)?v:[v]):[];
 const oh=o=>typeof o==='string'?`<span>${esc(o)}</span>`:`<span>${o.text?esc(o.text):''}${o.img?`<img class="oi" src="${o.img}" alt="">`:''}</span>`;
 const ot=o=>typeof o==='string'?o:(o.text||'(see image)');
 const brand='<div class="brand"><i></i>DOOMSAGE QUIZ</div>';
+const API='https://doom-server.tail61d13c.ts.net/quizapi/api';
+function ago(ts){try{const t=new Date(ts.replace(' ','T'));const d=(Date.now()-t.getTime())/1000;if(d<90)return 'just now';if(d<3600)return Math.round(d/60)+'m ago';if(d<86400)return Math.round(d/3600)+'h ago';if(d<86400*7)return Math.round(d/86400)+'d ago';return t.toLocaleDateString('en-IN',{day:'numeric',month:'short'})}catch(e){return ''}}
 async function home(){
   const sets=await (await fetch('catalog.json')).json();
   let mine=[];try{mine=JSON.parse(localStorage.getItem('dq-custom-sets')||'[]')}catch(e){}
   app.innerHTML=`<div class="view">${brand}<h1>Pick a set</h1><p class="sub">Tap an option, get the answer instantly.</p>`+
   `<button class="set" id="cv"><span class="tag">NEW</span><b>Paper to quiz</b><span>Upload a question paper PDF - AI builds a playable quiz</span><div class="go">→</div></button>`+
+  `<h2 style="font-size:15px;letter-spacing:.18em;color:var(--gold);margin:26px 0 12px">COMMUNITY TESTS</h2><div id="comm"><p class="sub" style="font-size:13px">Loading tests from the home server...</p></div>`+
+  (mine.length?'<h2 style="font-size:15px;letter-spacing:.18em;color:var(--gold);margin:26px 0 12px">MY PAPERS</h2>':'')+
   mine.map(s=>`<button class="set" data-my="${s.id}"><span class="tag" style="background:#3a3a2a;color:var(--cream)">My papers</span><b>${esc(s.title)}</b><span>${esc(s.subtitle||'')} · ${s.count} questions</span><div class="go">→</div></button>`).join('')+
+  '<h2 style="font-size:15px;letter-spacing:.18em;color:var(--gold);margin:26px 0 12px">BUILT-IN SETS</h2>'+
   sets.map(s=>`<button class="set" data-f="${[].concat(s.file).join(',')}"><span class="tag">${s.tag}</span><b>${esc(s.title)}</b><span>${esc(s.subtitle)} · ${[].concat(s.file).length>0?s.count:s.count} questions</span><div class="go">→</div></button>`).join('')+
   '<div class="credit">DOOMSAGE</div></div>';
   $('#cv').onclick=()=>location.href='convert.html';
+  fetch(API+'/quizzes',{signal:AbortSignal.timeout(15000)}).then(r=>r.json()).then(j=>{
+    const items=(j&&j.items)||[];
+    const c=$('#comm');if(!c)return;
+    if(!items.length){c.innerHTML='<p class="sub" style="font-size:13px">No community tests yet - convert a paper and it shows up here for everyone.</p>';return}
+    c.innerHTML=items.map(q=>`<button class="set" data-play="${q.id}" style="margin-bottom:12px"><span class="tag" style="background:#3a3a2a;color:var(--cream)">Community</span><b>${esc(q.title)}</b><span>${esc(q.subjects||'Mixed')} · ${q.question_count||0} questions · ${q.plays||0} plays · ${ago(q.created)}</span><div class="go">→</div></button>`).join('');
+    c.querySelectorAll('[data-play]').forEach(b=>b.onclick=()=>location.href='convert.html?play='+b.dataset.play);
+  }).catch(()=>{const c=$('#comm');if(c)c.innerHTML='<p class="sub" style="font-size:13px">Community tests are offline right now - the home server is unreachable. Try again later.</p>'});
   document.querySelectorAll('[data-my]').forEach(b=>b.onclick=()=>location.href='convert.html?set='+b.dataset.my);
   document.querySelectorAll('[data-f]').forEach(b=>b.onclick=async()=>{const fs=b.dataset.f.split(',');const parts=await Promise.all(fs.map(f=>fetch(f).then(r=>r.json())));set={...parts[0],questions:parts.flatMap(p=>p.questions)};i=0;ans=[];show()});
 }
