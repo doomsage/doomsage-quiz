@@ -156,7 +156,7 @@ function uploadView(){
   $('#dp').onclick=()=>pick(0,f=>{paperFile=f;$('#fp').textContent=f?f.name+' ('+(f.size/1048576).toFixed(1)+' MB)':'';ready()});
   $('#dk').onclick=()=>pick(0,f=>{keyFile=f;$('#fk').textContent=f?f.name+' ('+(f.size/1048576).toFixed(1)+' MB)':'';ready()});
   $('#go').onclick=()=>convert(false);
-  idb.get('conversion-job').then(job=>{if(!job)return;const b=document.createElement('button');b.className='btn ghost';b.textContent='Resume saved conversion ('+job.next+'/'+job.total+' pages)';b.onclick=()=>convert(true);$('#go').after(b)}).catch(()=>{});
+  idb.get('conversion-job').then(job=>{if(!job)return;const b=document.createElement('button');b.className='btn ghost';b.textContent='Resume saved conversion ('+(job.finished??job.next)+'/'+job.total+' pages)';b.onclick=()=>convert(true);$('#go').after(b)}).catch(()=>{});
   function ready(){$('#go').disabled=!paperFile}
 }
 function fail(msg){const e=$('#er');if(e){e.textContent=msg;e.style.display='block'}else{alert(msg)}}
@@ -188,9 +188,12 @@ async function convert(resume=false){
       const text=(await (await doc.getPage(p)).getTextContent()).items.map(x=>x.str).join(' ');
       if(/answer\s*(key|sheet)|hints?\s*(and|&)\s*solutions?|correct\s*options?/i.test(text))keyPages.push(p-1);
     }
-    for(let n=job.next;n<job.total;n++){
-      $('#st').textContent=Math.round(n/job.total*100)+'% complete - page '+(n+1)+' of '+job.total+' - '+job.questions.length+' questions saved';
-      $('#cp').style.width=(n/job.total*100)+'%';
+    job.batches=job.batches||{};
+    for(let p=0;p<job.next;p++)if(!job.batches[p])job.batches[p]=job.questions.filter(q=>q.page===p+1);
+    let cursor=0,failed=null;
+    const progress=()=>{job.finished=Object.keys(job.batches).length;$('#cp').style.width=(job.finished/job.total*100)+'%';$('#st').textContent=Math.round(job.finished/job.total*100)+'% complete - '+job.finished+'/'+job.total+' pages saved - '+job.questions.length+' questions';};
+    const readPage=async n=>{
+      progress();
       const indexes=[...new Set([0,Math.max(0,n-1),n,Math.min(job.total-1,n+1),...keyPages,Math.max(0,job.total-2),job.total-1])].sort((a,b)=>a-b);
       const excerpt=await PDFLib.PDFDocument.create();for(const p of await excerpt.copyPages(source,indexes))excerpt.addPage(p);
       const pages=indexes.map(p=>p+1);
@@ -198,7 +201,7 @@ async function convert(resume=false){
       if(job.key)files.push({kind:'key',name:job.keyName,data:to64(new Uint8Array(job.key))});
       let result;
       for(let attempt=0;attempt<3;attempt++){
-        if(attempt){$('#st').textContent='Retrying page '+(n+1)+' of '+job.total+' - completed pages are safe';await new Promise(r=>setTimeout(r,attempt*6000))}
+        if(attempt){$('#st').textContent=Math.round(Object.keys(job.batches).length/job.total*100)+'% complete - retrying page '+(n+1)+'; saved pages are safe';await new Promise(r=>setTimeout(r,attempt*6000))}
         try{
           const r=await fetch('/api/convert',{method:'POST',headers:{'Content-Type':'application/json'},signal:AbortSignal.timeout(280000),body:JSON.stringify({files,batch:{page:n+1,pages,subject:job.subject}})});
           const j=await r.json().catch(()=>null);
@@ -206,10 +209,18 @@ async function convert(resume=false){
           result=j.set;break;
         }catch(e){if(e.terminal||attempt===2)throw e}
       }
-      for(const q of result.questions){q.page=n+1;job.questions.push(q);job.subject=String(q.badge).split(' - ')[0]}
+      for(const q of result.questions)q.page=n+1;
+      job.batches[n]=result.questions;
+      job.questions=Object.keys(job.batches).sort((a,b)=>a-b).flatMap(k=>job.batches[k]);
+      if(result.questions.length)job.subject=String(result.questions.at(-1).badge).split(' - ')[0];
       if(result.title&&result.title!=='My paper')job.title=result.title;
-      job.next=n+1;await idb.put('conversion-job',job);$('#cp').style.width=(job.next/job.total*100)+'%';$('#st').textContent=Math.round(job.next/job.total*100)+'% complete - '+job.next+'/'+job.total+' pages saved';
-    }
+      job.next=0;while(job.next<job.total&&Object.hasOwn(job.batches,job.next))job.next++;
+      progress();await idb.put('conversion-job',job);
+    };
+    // Three bounded workers let other pages progress while a hard page is solved.
+    const worker=async()=>{while(!failed&&cursor<job.total){const n=cursor++;if(Object.hasOwn(job.batches,n))continue;try{await readPage(n)}catch(e){failed=e}}};
+    await Promise.all([worker(),worker(),worker()]);
+    if(failed)throw failed;
     if(!job.questions.length)throw Error('No question starts were found. Check that this is the question paper, not only a key.');
     set={id:'paper-'+Date.now().toString(36),title:job.title,subtitle:[...new Set(job.questions.map(q=>String(q.badge).split(' - ')[0]))].join(' + '),latex:true,count:job.questions.length,questions:job.questions};
     pdfBuf=job.paper;pdfDoc=null;publishView();
@@ -363,7 +374,7 @@ $('#zm').onclick=()=>{$('#zm').style.display='none'};
       const j=await r.json().catch(()=>null);
       if(!r.ok||!j||!j.quiz)throw Error('not found');
       set={id:j.id,title:j.quiz.title||j.title,latex:true,questions:j.quiz.questions};
-      communityMode=true;await idb.del('conversion-job','pdfs').catch(()=>{});communityId=j.id;pubCreated=j.created||'';
+      communityMode=true;communityId=j.id;pubCreated=j.created||'';
       if(j.source_pdf){try{const pr=await fetch(API+'/files/quizzes/'+j.id+'/'+j.source_pdf,{signal:AbortSignal.timeout(40000)});if(pr.ok)pdfBuf=await pr.arrayBuffer()}catch(e){}}
       fetch(API+'/quizzes/'+j.id+'/play',{method:'POST'}).catch(()=>{});
       i=0;ans=[];times=[];startTime=Date.now();show();return
