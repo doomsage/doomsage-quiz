@@ -57,12 +57,45 @@ h1{font-size:30px;margin:0 0 6px;line-height:1.15}
 .oi{display:block;max-width:100%;max-height:150px;background:#fff;border-radius:8px;padding:3px;margin-top:2px}
 #zm{position:fixed;inset:0;background:rgba(0,0,0,.92);display:none;align-items:center;justify-content:center;z-index:9;padding:14px}
 #zm img{max-width:100%;max-height:100%;background:#fff;border-radius:10px;padding:8px}
-.credit{text-align:center;font-size:11px;letter-spacing:.3em;color:#8a6f1c;margin-top:34px}
+.set{margin-bottom:12px}.cw{position:relative;margin-bottom:12px}.cw .set{margin:0}.pill{position:absolute;top:14px;right:14px;background:none;border:1px solid #5a4912;color:var(--gold);border-radius:99px;padding:5px 11px;font-size:12px;font-weight:700;cursor:pointer;z-index:2}.pill.on{background:var(--gold);color:#000;border-color:var(--gold)}.pill:disabled{opacity:.7}
+.sw{font-variant-numeric:tabular-nums;font-size:13px;font-weight:700;color:#000;background:var(--gold);border-radius:99px;padding:4px 10px;min-width:52px;text-align:center}.sw.done{background:#3a3a2a;color:var(--cream)}.sj{margin-bottom:12px}.sjh{display:flex;justify-content:space-between;gap:8px;font-size:14px}.sjh span{color:#a9a98a;font-size:12px}.sjb{height:6px;background:#3a1414;border-radius:9px;overflow:hidden;margin-top:5px}.sjb div{height:100%;background:var(--ok)}
+.credit{.stat{display:flex;gap:10px;margin:16px 0}.stat div{flex:1;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;text-align:center}.stat b{font-size:22px;display:block}.stat span{font-size:11px;color:#a9a98a;letter-spacing:.08em;text-transform:uppercase}.chips{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0}.chip{font-size:12px;border:1px solid var(--line);border-radius:99px;padding:4px 10px;color:#a9a98a}
+text-align:center;font-size:11px;letter-spacing:.3em;color:#8a6f1c;margin-top:34px}
 </style></head><body><div id="app"></div><div id="zm"><img alt=""></div>
 <script>
 const $=s=>document.querySelector(s),app=$('#app');
+const idb={db:null,open(){return new Promise((res,rej)=>{if(this.db)return res(this.db);const r=indexedDB.open('doomsage-quiz',2);r.onupgradeneeded=()=>{const d=r.result;['pdfs','quizzes'].forEach(n=>{if(!d.objectStoreNames.contains(n))d.createObjectStore(n)})};r.onsuccess=()=>{this.db=r.result;res(r.result)};r.onerror=()=>rej(r.error)})},
+put(id,blob,st){return this.open().then(db=>new Promise((res,rej)=>{const tx=db.transaction(st||'pdfs','readwrite');tx.objectStore(st||'pdfs').put(blob,id);tx.oncomplete=res;tx.onerror=()=>rej(tx.error)}))},
+get(id,st){return this.open().then(db=>new Promise((res,rej)=>{const rq=db.transaction(st||'pdfs').objectStore(st||'pdfs').get(id);rq.onsuccess=()=>res(rq.result);rq.onerror=()=>rej(rq.error)}))},
+del(id,st){return this.open().then(db=>new Promise((res,rej)=>{const tx=db.transaction(st,'readwrite');tx.objectStore(st).delete(id);tx.oncomplete=res;tx.onerror=()=>rej(tx.error)}))},
+all(st){return this.open().then(db=>new Promise((res,rej)=>{const rq=db.transaction(st).objectStore(st).getAll();rq.onsuccess=()=>res(rq.result||[]);rq.onerror=()=>rej(rq.error)}))}};
+if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
+async function offlineReady(){
+  try{await navigator.serviceWorker.ready}catch(e){}
+  const need=['index.html','convert.html','https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js','https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js','https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'];
+  for(const u of need){if(!(await caches.match(u,{ignoreSearch:true})))return false}return true;
+}
 const L=['A','B','C','D'];
-let set=null,i=0,ans=[],locked=false;
+let times=[],qStart=0,tick=null;
+function fmtSw(ms){const s=Math.floor(ms/1000);return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')}
+function fmtT(ms){if(!ms||ms<0)return '0s';const s=Math.round(ms/1000);if(s<60)return s+'s';return Math.floor(s/60)+'m '+(s%60)+'s'}
+function startQ(){qStart=Date.now();clearInterval(tick);tick=setInterval(()=>{const e=document.getElementById('sw');if(e)e.textContent=fmtSw(Date.now()-qStart)},250)}
+function stopQ(){times[i]=Date.now()-qStart;clearInterval(tick);const e=document.getElementById('sw');if(e){e.textContent=fmtSw(times[i]);e.classList.add('done')}}
+function report(okOf){
+  const qs=set.questions,n=qs.length;const subj={};
+  qs.forEach((q,j)=>{const k=String(q.badge).split(' - ')[0];const o=subj[k]||(subj[k]={t:0,c:0,ms:0});o.t++;if(okOf(j))o.c++;o.ms+=times[j]||0});
+  const wrong=qs.map((_,j)=>j).filter(j=>!okOf(j));const c=n-wrong.length;
+  const tot=times.reduce((a,b)=>a+(b||0),0);
+  let slow=-1;times.forEach((t,j)=>{if(slow<0||t>times[slow])slow=j});
+  return `<div class="stat"><div><b style="color:var(--ok)">${c}</b><span>Correct</span></div><div><b style="color:var(--bad)">${wrong.length}</b><span>Wrong</span></div><div><b>${Math.round(c/n*100)}%</b><span>Accuracy</span></div></div>
+  <p class="msg" style="font-size:13px;margin:-6px 0 18px">Total ${fmtT(tot)} · avg ${fmtT(tot/n)} per question${slow>=0&&times[slow]?` · slowest Q${slow+1} (${fmtT(times[slow])})`:''}</p>
+  <h1 style="font-size:16px;letter-spacing:.14em;color:var(--gold);margin:6px 0 10px">BY SUBJECT</h1>`+
+  Object.entries(subj).map(([k,o])=>`<div class="sj"><div class="sjh"><b>${esc(k)}</b><span>${o.c}/${o.t} correct · ${o.t-o.c} wrong · avg ${fmtT(o.ms/o.t)}</span></div><div class="sjb"><div style="width:${o.c/o.t*100}%"></div></div></div>`).join('')+
+  `<h1 style="font-size:16px;letter-spacing:.14em;color:var(--gold);margin:22px 0 10px">WRONG QUESTIONS</h1>`+
+  (wrong.length?`<div class="chips">${wrong.map(j=>`<span class="chip" style="border-color:var(--bad);color:#ffd9d9">Q${j+1} · ${esc(String(qs[j].badge).split(' - ')[0])} · ${fmtT(times[j])}</span>`).join('')}</div><p class="msg" style="font-size:12px;text-align:left;margin:0 0 6px">Tap any question below to see what went wrong.</p>`:'<p class="msg" style="text-align:left">None. Clean sweep.</p>');
+}
+
+let set=null,i=0,ans=[],locked=false,startTime=Date.now();
 const esc=s=>s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 const imgs=v=>v?(Array.isArray(v)?v:[v]):[];
 const oh=o=>typeof o==='string'?`<span>${esc(o)}</span>`:`<span>${o.text?esc(o.text):''}${o.img?`<img class="oi" src="${o.img}" alt="">`:''}</span>`;
@@ -75,6 +108,7 @@ async function home(){
   let mine=[];try{mine=JSON.parse(localStorage.getItem('dq-custom-sets')||'[]')}catch(e){}
   app.innerHTML=`<div class="view">${brand}<h1>Pick a set</h1><p class="sub">Tap an option, get the answer instantly.</p>`+
   `<button class="set" id="cv"><span class="tag">NEW</span><b>Paper to quiz</b><span>Upload a question paper PDF - AI builds a playable quiz</span><div class="go">→</div></button>`+
+  `<div id="sv"></div>`+
   `<h2 style="font-size:15px;letter-spacing:.18em;color:var(--gold);margin:26px 0 12px">COMMUNITY TESTS</h2><div id="comm"><p class="sub" style="font-size:13px">Loading tests from the home server...</p></div>`+
   (mine.length?'<h2 style="font-size:15px;letter-spacing:.18em;color:var(--gold);margin:26px 0 12px">MY PAPERS</h2>':'')+
   mine.map(s=>`<button class="set" data-my="${s.id}"><span class="tag" style="background:#3a3a2a;color:var(--cream)">My papers</span><b>${esc(s.title)}</b><span>${esc(s.subtitle||'')} · ${s.count} questions</span><div class="go">→</div></button>`).join('')+
@@ -82,30 +116,53 @@ async function home(){
   sets.map(s=>`<button class="set" data-f="${[].concat(s.file).join(',')}"><span class="tag">${s.tag}</span><b>${esc(s.title)}</b><span>${esc(s.subtitle)} · ${[].concat(s.file).length>0?s.count:s.count} questions</span><div class="go">→</div></button>`).join('')+
   '<div class="credit">DOOMSAGE</div></div>';
   $('#cv').onclick=()=>location.href='convert.html';
+  let saved=[];try{saved=await idb.all('quizzes')}catch(e){}
+  const savedIds=new Set(saved.map(x=>x.id));
+  const H='<h2 style="font-size:15px;letter-spacing:.18em;color:var(--gold);margin:26px 0 12px">';
+  if(saved.length){
+    saved.sort((x,y)=>(y.saved||0)-(x.saved||0));
+    $('#sv').innerHTML=H+'SAVED FOR OFFLINE</h2>'+saved.map(q=>`<div class="cw"><button class="set" data-dl="${q.id}"><span class="tag">Offline</span><b>${esc(q.title)}</b><span>${esc(q.subjects||'Mixed')} · ${q.count||0} questions · works without internet</span><div class="go">→</div></button><button class="pill" data-rm="${q.id}">Remove</button></div>`).join('');
+    document.querySelectorAll('[data-dl]').forEach(b=>b.onclick=()=>location.href='convert.html?dl='+b.dataset.dl);
+    document.querySelectorAll('[data-rm]').forEach(b=>b.onclick=async()=>{if(confirm('Remove this saved copy from this phone? It stays in Community tests.')){await idb.del(b.dataset.rm,'quizzes');home()}});
+  }
+  async function saveQ(q,btn){
+    btn.disabled=true;btn.textContent='Saving...';
+    try{
+      const j=await (await fetch(API+'/quizzes/'+q.id,{signal:AbortSignal.timeout(25000)})).json();
+      if(!j||!j.quiz)throw Error('Could not load the test.');
+      let pdf=null;
+      if(j.source_pdf){const pr=await fetch(API+'/files/quizzes/'+j.id+'/'+j.source_pdf,{signal:AbortSignal.timeout(60000)});if(!pr.ok)throw Error('Could not download the paper PDF.');pdf=await pr.blob()}
+      await idb.put(j.id,{id:j.id,title:j.quiz.title||j.title,subjects:j.subjects,count:j.question_count,created:j.created,quiz:j.quiz,pdf,saved:Date.now()},'quizzes');
+      if(!(await offlineReady()))throw Error('Offline files are still loading. Stay online a few seconds and tap again.');
+      home();
+    }catch(e){btn.disabled=false;btn.textContent='Save offline';alert('Could not save for offline: '+(e.message||e))}
+  }
   fetch(API+'/quizzes',{signal:AbortSignal.timeout(15000)}).then(r=>r.json()).then(j=>{
     const items=(j&&j.items)||[];
     const c=$('#comm');if(!c)return;
     if(!items.length){c.innerHTML='<p class="sub" style="font-size:13px">No community tests yet - convert a paper and it shows up here for everyone.</p>';return}
-    c.innerHTML=items.map(q=>`<button class="set" data-play="${q.id}" style="margin-bottom:12px"><span class="tag" style="background:#3a3a2a;color:var(--cream)">Community</span><b>${esc(q.title)}</b><span>${esc(q.subjects||'Mixed')} · ${q.question_count||0} questions · ${q.plays||0} plays · ${ago(q.created)}</span><div class="go">→</div></button>`).join('');
+    c.innerHTML=items.map(q=>`<div class="cw"><button class="set" data-play="${q.id}"><span class="tag" style="background:#3a3a2a;color:var(--cream)">Community</span><b>${esc(q.title)}</b><span>${esc(q.subjects||'Mixed')} · ${q.question_count||0} questions · ${q.plays||0} plays · ${ago(q.created)}</span><div class="go">→</div></button>${savedIds.has(q.id)?'<button class="pill on" disabled>Saved ✓</button>':`<button class="pill" data-sv="${q.id}">Save offline</button>`}</div>`).join('');
     c.querySelectorAll('[data-play]').forEach(b=>b.onclick=()=>location.href='convert.html?play='+b.dataset.play);
-  }).catch(()=>{const c=$('#comm');if(c)c.innerHTML='<p class="sub" style="font-size:13px">Community tests are offline right now - the home server is unreachable. Try again later.</p>'});
+    c.querySelectorAll('[data-sv]').forEach(b=>b.onclick=()=>saveQ(items.find(x=>x.id===b.dataset.sv),b));
+  }).catch(()=>{const c=$('#comm');if(c)c.innerHTML='<p class="sub" style="font-size:13px">Community tests need internet and the home server. '+(saved.length?'Your saved tests above still work offline.':'Save tests for offline while you are online.')+'</p>'});
   document.querySelectorAll('[data-my]').forEach(b=>b.onclick=()=>location.href='convert.html?set='+b.dataset.my);
-  document.querySelectorAll('[data-f]').forEach(b=>b.onclick=async()=>{const fs=b.dataset.f.split(',');const parts=await Promise.all(fs.map(f=>fetch(f).then(r=>r.json())));set={...parts[0],questions:parts.flatMap(p=>p.questions)};i=0;ans=[];show()});
+  document.querySelectorAll('[data-f]').forEach(b=>b.onclick=async()=>{const fs=b.dataset.f.split(',');const parts=await Promise.all(fs.map(f=>fetch(f).then(r=>r.json())));set={...parts[0],questions:parts.flatMap(p=>p.questions)};i=0;ans=[];times=[];startTime=Date.now();show()});
 }
 function show(){
   locked=false;const q=set.questions[i],n=set.questions.length;
-  app.innerHTML=`<div class="view"><div class="top"><button class="x" id="quit">✕</button><div class="bar"><div style="width:${i/n*100}%"></div></div><div class="cnt">${i+1}/${n}</div></div>
+  app.innerHTML=`<div class="view"><div class="top"><button class="x" id="quit">✕</button><div class="bar"><div style="width:${i/n*100}%"></div></div><div class="sw" id="sw">0:00</div><div class="cnt">${i+1}/${n}</div></div>
   <span class="badge">${esc(q.badge)}</span><p class="q">${esc(q.q)}</p>${imgs(q.img).map(u=>`<img class="qi" src="${u}" alt="">`).join('')}
   ${q.options.map((o,k)=>`<button class="opt" data-k="${k}"><em>${L[k]}</em>${oh(o)}</button>`).join('')}
   <div id="ex"></div><div class="credit">DOOMSAGE</div></div><div class="foot" id="ft" style="display:none"><button class="btn" id="nx">${i+1<n?'Next question →':'See score'}</button></div>`;
+  startQ();
   requestAnimationFrame(()=>{document.querySelector('.bar div').style.width=(i+1)/n*100+'%'});
-  $('#quit').onclick=home;
+  $('#quit').onclick=()=>{clearInterval(tick);home()};
   document.querySelectorAll('.opt').forEach(b=>b.onclick=()=>pick(+b.dataset.k));
   document.querySelectorAll('.qi').forEach(m=>m.onclick=()=>{$('#zm img').src=m.src;$('#zm').style.display='flex'});
   $('#nx').onclick=()=>{i++;window.scrollTo(0,0);i<n?show():done()};
 }
 function pick(k){
-  if(locked)return;locked=true;const q=set.questions[i];ans[i]=k;
+  if(locked)return;locked=true;stopQ();const q=set.questions[i];ans[i]=k;
   document.querySelectorAll('.opt').forEach((b,j)=>{b.disabled=true;if(j===q.answer)b.classList.add('ok');else if(j===k)b.classList.add('bad')});
   if(navigator.vibrate)navigator.vibrate(k===q.answer?25:[40,30,40]);
   $('#ex').innerHTML=`<div class="exp"><b>${k===q.answer?'Correct.':'Wrong. Answer: '+L[q.answer]+'.'}</b> ${esc(q.explain)}</div>`;
@@ -113,16 +170,17 @@ function pick(k){
   setTimeout(()=>$('#ex').scrollIntoView({behavior:'smooth',block:'center'}),120);
 }
 function done(){
-  const n=set.questions.length,s=ans.filter((a,j)=>a===set.questions[j].answer).length,C=2*Math.PI*75;
+  const n=set.questions.length,okOf=j=>ans[j]===set.questions[j].answer,s=ans.filter((a,j)=>a===set.questions[j].answer).length,C=2*Math.PI*75;
   const m=s===n?'Perfect. Locked in.':s>=n*.7?'Strong. Review the misses.':s>=n*.4?'Decent. Revise the reviews below.':'Rough one. Read the reviews and retry.';
   app.innerHTML=`<div class="view">${brand}<div class="ring"><svg width="170" height="170"><circle class="t" cx="85" cy="85" r="75"/><circle class="p" id="pr" cx="85" cy="85" r="75" stroke-dasharray="${C}" stroke-dashoffset="${C}"/></svg><div>${s}/${n}</div></div>
-  <p class="msg">${m}</p><h1 style="font-size:20px;margin-bottom:12px">Review</h1>`+
-  set.questions.map((q,j)=>{const ok=ans[j]===q.answer;return `<div class="rv ${ok?'ok':'bad'}"><div class="d">${ok?'✓':'✕'}</div><div><b>Q${j+1}</b> · ${esc(q.badge)}<small>${ok?'You got it':'You chose '+L[ans[j]]+', answer '+L[q.answer]}</small><div class="more"><p>${esc(q.q.split('\n')[0])}</p><p><b style="color:var(--gold)">${L[q.answer]}.</b> ${esc(ot(q.options[q.answer]))}</p>${q.options[q.answer].img?`<img class="oi" src="${q.options[q.answer].img}" alt="">`:''}<p>${esc(q.explain)}</p></div></div></div>`}).join('')+
+  <p class="msg">${m}</p>${report(okOf)}<h1 style="font-size:16px;letter-spacing:.14em;color:var(--gold);margin:22px 0 10px">FULL REVIEW</h1>`+
+  set.questions.map((q,j)=>{const ok=ans[j]===q.answer;return `<div class="rv ${ok?'ok':'bad'}"><div class="d">${ok?'✓':'✕'}</div><div><b>Q${j+1}</b> · ${esc(q.badge)}<small>${ok?'You got it':(ans[j]==null?'Skipped':'You chose '+L[ans[j]])+', answer '+L[q.answer]} · ${fmtT(times[j])}</small><div class="more"><p>${esc(q.q.split('\n')[0])}</p><p><b style="color:var(--gold)">${L[q.answer]}.</b> ${esc(ot(q.options[q.answer]))}</p>${q.options[q.answer].img?`<img class="oi" src="${q.options[q.answer].img}" alt="">`:''}<p>${esc(q.explain)}</p></div></div></div>`}).join('')+
   '<div style="height:10px"></div><button class="btn" id="re" style="position:static">Retry</button><button class="btn ghost" id="hm">All sets</button><div class="credit">DOOMSAGE</div></div>';
   setTimeout(()=>{$('#pr').style.strokeDashoffset=C*(1-s/n)},80);
   document.querySelectorAll('.rv').forEach(r=>r.onclick=()=>r.classList.toggle('open'));
-  $('#re').onclick=()=>{i=0;ans=[];show()};$('#hm').onclick=home;
+  $('#re').onclick=()=>{i=0;ans=[];times=[];startTime=Date.now();show()};$('#hm').onclick=home;
 }
 $('#zm').onclick=()=>{$('#zm').style.display='none'};
 home();
 </script></body></html>
+
