@@ -173,6 +173,7 @@ async function fetchLive(){
   const r=await fetch(API+'/jobs/'+jobId,{signal:AbortSignal.timeout(15000)});const j=await r.json();if(!r.ok)throw Error(j.error||'Test not found');
   liveJob=j;
   if(!set)set={id:j.id,title:j.title,latex:true,questions:j.questions};else set.questions=j.questions;
+  if(liveJob.status==='complete')clearInterval(jobPoll);
   paintLive();
   if(waitingForQuestion){if(i<set.questions.length){waitingForQuestion=false;show()}else if(j.status==='complete'){waitingForQuestion=false;done()}else showWaiting()}
   return j;
@@ -394,7 +395,7 @@ function pick(k){
   if(navigator.vibrate)navigator.vibrate(k===q.answer?25:[40,30,40]);
   $('#ex').innerHTML=`<div class="exp"><b>${k===q.answer?'Correct.':'Wrong. Answer: '+L[q.answer]+'.'}</b> ${esc(q.explain)}</div>`;tex();
   $('#nx').style.display='block';$('#nx').textContent=i+1<set.questions.length?'Next question →':'See score';
-  setTimeout(()=>$('#ex').scrollIntoView({behavior:'smooth',block:'center'}),120);
+  setTimeout(()=>$('#ex')?.scrollIntoView({behavior:'smooth',block:'center'}),120);
 }
 function numOk(v,a){const x=parseFloat(v),y=parseFloat(a);if(isNaN(x)||isNaN(y))return String(v).trim()===String(a).trim();const t=Math.max(0.011,Math.abs(y)*0.005);return Math.abs(x-y)<=t}
 function checkNum(){
@@ -404,7 +405,7 @@ function checkNum(){
   if(navigator.vibrate)navigator.vibrate(ok?25:[40,30,40]);
   $('#ex').innerHTML=`<div class="exp"><b>${ok?'Correct.':'Wrong. Answer: '+esc(q.answer_value)+'.'}</b> ${esc(q.explain)}</div>`;tex();
   $('#nx').textContent=i+1<set.questions.length?'Next question →':'See score';
-  setTimeout(()=>$('#ex').scrollIntoView({behavior:'smooth',block:'center'}),120);
+  setTimeout(()=>$('#ex')?.scrollIntoView({behavior:'smooth',block:'center'}),120);
 }
 function done(){
   const n=set.questions.length;
