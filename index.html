@@ -105,12 +105,14 @@ const ot=o=>typeof o==='string'?o:(o.text||'(see image)');
 const brand='<div class="brand"><i></i>DOOMSAGE QUIZ</div>';
 const API='https://doom-server.tail61d13c.ts.net/quizapi/api';
 function ago(ts){try{const t=new Date(ts.replace(' ','T'));const d=(Date.now()-t.getTime())/1000;if(d<90)return 'just now';if(d<3600)return Math.round(d/60)+'m ago';if(d<86400)return Math.round(d/3600)+'h ago';if(d<86400*7)return Math.round(d/86400)+'d ago';return t.toLocaleDateString('en-IN',{day:'numeric',month:'short'})}catch(e){return ''}}
+let buildingPoll=null;
 async function home(){
+  clearInterval(buildingPoll);
   const sets=await (await fetch('catalog.json')).json();
   let mine=[];try{mine=JSON.parse(localStorage.getItem('dq-custom-sets')||'[]')}catch(e){}
   app.innerHTML=`<div class="view">${brand}<h1>Pick a set</h1><p class="sub">Tap an option, get the answer instantly.</p>`+
   `<button class="set" id="cv"><span class="tag">NEW</span><b>Paper to quiz</b><span>Upload a question paper PDF - AI builds a playable quiz</span><div class="go">→</div></button>`+
-  `<div id="sv"></div>`+
+  `<div id="sv"></div><div id="building"></div>`+
   `<h2 style="font-size:15px;letter-spacing:.18em;color:var(--gold);margin:26px 0 12px">COMMUNITY TESTS</h2><div id="comm"><p class="sub" style="font-size:13px">Loading tests from the home server...</p></div>`+
   (mine.length?'<h2 style="font-size:15px;letter-spacing:.18em;color:var(--gold);margin:26px 0 12px">MY PAPERS</h2>':'')+
   mine.map(s=>`<button class="set" data-my="${s.id}"><span class="tag" style="background:#3a3a2a;color:var(--cream)">My papers</span><b>${esc(s.title)}</b><span>${esc(s.subtitle||'')} · ${s.count} questions</span><div class="go">→</div></button>`).join('')+
@@ -147,10 +149,21 @@ async function home(){
     c.querySelectorAll('[data-play]').forEach(b=>b.onclick=()=>location.href='convert.html?play='+b.dataset.play);
     c.querySelectorAll('[data-sv]').forEach(b=>b.onclick=()=>saveQ(items.find(x=>x.id===b.dataset.sv),b));
   }).catch(()=>{const c=$('#comm');if(c)c.innerHTML='<p class="sub" style="font-size:13px">Community tests need internet and the home server. '+(saved.length?'Your saved tests above still work offline.':'Save tests for offline while you are online.')+'</p>'});
+  async function updateBuilding(){
+    const box=$('#building');if(!box){clearInterval(buildingPoll);return}
+    try{
+      const r=await fetch(API+'/jobs',{signal:AbortSignal.timeout(12000)});if(!r.ok)throw Error('unavailable');const j=await r.json();
+      if(!j.items?.length){box.innerHTML='';return}
+      box.innerHTML=H+'BUILDING TESTS</h2>'+j.items.map(q=>`<button class="set" data-job="${q.id}"><span class="tag">${q.count?'Ready to solve':q.status==='paused'?'Paused':'Building'}</span><b>${esc(q.title)}</b><span>${q.progress}% complete · ${q.completed}/${q.total} pages · ${q.count} questions ready</span><span>${q.status==='complete'?'Complete':q.status==='paused'?'Build paused - ready questions remain playable':'More questions are being built in the background'}</span><div class="go">→</div></button>`).join('');
+      box.querySelectorAll('[data-job]').forEach(b=>b.onclick=()=>location.href='convert.html?job='+b.dataset.job);
+    }catch(e){if(!box.children.length)box.innerHTML='<p class="sub" style="font-size:13px">Building tests need the home server. Reconnecting...</p>'}
+  }
+  updateBuilding();buildingPoll=setInterval(updateBuilding,5000);
   document.querySelectorAll('[data-my]').forEach(b=>b.onclick=()=>location.href='convert.html?set='+b.dataset.my);
   document.querySelectorAll('[data-f]').forEach(b=>b.onclick=async()=>{const fs=b.dataset.f.split(',');const parts=await Promise.all(fs.map(f=>fetch(f).then(r=>r.json())));set={...parts[0],questions:parts.flatMap(p=>p.questions)};i=0;ans=[];times=[];startTime=Date.now();show()});
 }
 function show(){
+  clearInterval(buildingPoll);
   locked=false;const q=set.questions[i],n=set.questions.length;
   app.innerHTML=`<div class="view"><div class="top"><button class="x" id="quit">✕</button><div class="bar"><div style="width:${i/n*100}%"></div></div><div class="sw" id="sw">0:00</div><button class="x" id="inv" title="Swap question and options">⇅</button><div class="cnt">${i+1}/${n}</div></div>
   <div class="qa${inv?' inv':''}"><div class="qblk"><span class="badge">${esc(q.badge)}</span><p class="q">${esc(q.q)}</p>${imgs(q.img).map(u=>`<img class="qi" src="${u}" alt="">`).join('')}
@@ -186,4 +199,3 @@ function done(){
 $('#zm').onclick=()=>{$('#zm').style.display='none'};
 home();
 </script></body></html>
-
