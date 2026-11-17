@@ -54,7 +54,7 @@ const SCHEMA = {
           type: { type: "STRING" },
           q: { type: "STRING" },
           options: { type: "ARRAY", items: { type: "STRING" }, nullable: true },
-          answer_index: { type: "INTEGER", nullable: true },
+          answer_index: { type: "INTEGER", minimum: 0, maximum: 3, nullable: true },
           answer_value: { type: "STRING", nullable: true },
           explain: { type: "STRING" },
           page: { type: "INTEGER", nullable: true },
@@ -77,7 +77,7 @@ function normalize(raw) {
     if (q.type === "mcq" && Array.isArray(q.options) && q.options.length >= 2) {
       const opts = q.options.slice(0, 4).map(String);
       let a = q.answer_index;
-      if (!Number.isInteger(a) || a < 0 || a >= opts.length) throw Error(`Answer for Q${q.num} could not be verified. Retry this page.`);
+      if (!Number.isInteger(a) || a < 0 || a >= opts.length) throw Error(`Answer for Q${q.num} is missing or invalid (${String(a)}). Retry this page.`);
       out.push({ ...base, options: opts, answer: a });
     } else {
       const v = q.answer_value != null ? String(q.answer_value).trim() : "";
@@ -135,7 +135,7 @@ BATCH RULES (override the whole-paper scope above): Extract ONLY questions whose
           responseSchema: SCHEMA,
           temperature: 0.2,
           maxOutputTokens: 16000,
-          thinkingConfig: { thinkingBudget: 0 }
+          thinkingConfig: { thinkingBudget: 1024 }
         }
       })
     });
