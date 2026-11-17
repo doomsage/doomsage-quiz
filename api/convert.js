@@ -143,8 +143,16 @@ BATCH RULES (override the whole-paper scope above): Extract ONLY questions whose
     clearTimeout(timer);
     if (!r.ok) {
       const msg = (j && j.error && j.error.message) || `Gemini error ${r.status}`;
-      const nice = r.status === 429 ? "The free AI quota is busy right now. Wait a minute and retry." : msg;
-      return res.status(r.status === 429 ? 429 : 502).json({ ok: false, error: nice });
+      if(r.status === 429){
+        const details=j?.error?.details||[];
+        const quotas=details.flatMap(d=>(d.violations||[]).map(v=>v.quotaId||v.quotaMetric||'')).join(' ');
+        const daily=/per.?day|daily/i.test(quotas);
+        const retry=details.find(d=>d.retryDelay)?.retryDelay;
+        const seconds=retry?Math.ceil(parseFloat(retry)):60;
+        res.setHeader('Retry-After',String(seconds));
+        return res.status(429).json({ok:false,rate_limited:true,quota_kind:daily?'daily':'rate',retry_after_seconds:seconds,error:daily?'The AI daily quota has been reached. Completed pages are saved. Resume when the quota resets.':'The AI rate limit has been reached. Completed pages are saved. Wait at least '+seconds+' seconds, then resume.'});
+      }
+      return res.status(502).json({ ok: false, error: msg });
     }
     if (j?.candidates?.[0]?.finishReason !== "STOP") return res.status(502).json({ok:false,error:"The AI did not finish this page. Retry to continue.",retryable:true});
     let parsed = null;
