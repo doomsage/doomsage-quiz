@@ -142,20 +142,81 @@ async function showFigure(n,btn){
   if(!u){btn.textContent='Figure not available - PDF not stored'}
 }
 
+const jobId=new URLSearchParams(location.search).get('job');
+let liveJob=null,jobPoll=null,waitingForQuestion=false;
+async function submitBackground(){
+  if(!paperFile)return;
+  if(paperFile.size+(keyFile?keyFile.size:0)>MAX)return fail('Combined PDF limit is 3 MB.');
+  const btn=$('#go');btn.disabled=true;btn.textContent='Uploading paper...';
+  try{
+    const rd=f=>new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(',')[1]);r.onerror=rej;r.readAsDataURL(f)});
+    const files=[{kind:'paper',name:paperFile.name,data:await rd(paperFile)}];
+    if(keyFile)files.push({kind:'key',name:keyFile.name,data:await rd(keyFile)});
+    const title=$('#jobtitle').value.trim()||paperFile.name.replace(/\.pdf$/i,'');
+    const r=await fetch(API+'/jobs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title,files}),signal:AbortSignal.timeout(60000)});
+    const j=await r.json();if(!r.ok||!j.id)throw Error(j.error||'Upload failed');
+    localStorage.setItem('dq-job-token-'+j.id,j.token);
+    location.href='index.html';
+  }catch(e){btn.disabled=false;btn.textContent='Upload and build quiz';fail(e.message||'Upload failed. Retry.')}
+}
+function liveStatus(){
+  if(!jobId||!liveJob)return '';
+  return `<div class="warn" id="live-status">${liveJob.status==='complete'?'Complete':liveJob.status==='paused'?'Conversion paused':'Building in background'} · ${liveJob.progress}% · ${liveJob.completed}/${liveJob.total} pages · ${liveJob.count} questions ready${liveJob.error?'<br>'+esc(liveJob.error):''}</div>`;
+}
+function paintLive(){
+  if(!jobId)return;const old=$('#live-status');if(old)old.outerHTML=liveStatus();
+  else if($('.top'))$('.top').insertAdjacentHTML('afterend',liveStatus());
+  if($('.cnt'))$('.cnt').textContent=(i+1)+'/'+set.questions.length+(liveJob.status==='complete'?'':' +');
+}
+function saveLiveAttempt(){if(jobId)try{localStorage.setItem('dq-attempt-'+jobId,JSON.stringify({i,ans,times}))}catch(e){}}
+async function fetchLive(){
+  const r=await fetch(API+'/jobs/'+jobId,{signal:AbortSignal.timeout(15000)});const j=await r.json();if(!r.ok)throw Error(j.error||'Test not found');
+  liveJob=j;
+  if(!set)set={id:j.id,title:j.title,latex:true,questions:j.questions};else set.questions=j.questions;
+  paintLive();
+  if(waitingForQuestion){if(i<set.questions.length){waitingForQuestion=false;show()}else if(j.status==='complete'){waitingForQuestion=false;done()}else showWaiting()}
+  return j;
+}
+function showWaiting(){
+  waitingForQuestion=true;clearInterval(tick);
+  app.innerHTML=`<div class="view">${brand}<h1 style="font-size:24px">${liveJob.status==='paused'?'Build paused':'You are all caught up'}</h1><p class="sub">${liveJob.status==='paused'?'Your ready questions and answers are safe.':'The next questions will appear here automatically as they are ready.'}</p>${liveStatus()}<button class="btn" id="back-list">Back to tests</button>${set.questions.length?'<button class="btn ghost" id="partial-score">See score for ready questions</button>':''}<div id="resume-job"></div></div>`;
+  $('#back-list').onclick=()=>location.href='index.html';
+  if($('#partial-score'))$('#partial-score').onclick=()=>{waitingForQuestion=false;done()};
+  const token=localStorage.getItem('dq-job-token-'+jobId);
+  if(token&&liveJob.status==='paused'){
+    $('#resume-job').innerHTML='<button class="btn ghost" id="resume-build">Resume building</button>';
+    $('#resume-build').onclick=async()=>{const b=$('#resume-build');b.disabled=true;try{const r=await fetch(API+'/jobs/'+jobId+'/resume',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token})});if(!r.ok)throw Error('Could not resume');await fetchLive()}catch(e){b.disabled=false;b.textContent='Retry resume'}};
+  }
+}
+async function startLive(){
+  app.innerHTML=`<div class="view">${brand}<p class="sub">Loading your building test...</p></div>`;
+  try{
+    await fetchLive();communityMode=true;communityId=null;
+    try{const a=JSON.parse(localStorage.getItem('dq-attempt-'+jobId)||'null');if(a){i=a.i||0;ans=a.ans||[];times=a.times||[]}}catch(e){}
+    // Only restore answered positions. An unanswered current question starts fresh.
+    i=Math.min(i,set.questions.length);startTime=Date.now();
+    fetch(API+'/jobs/'+jobId+'/pdf').then(r=>r.ok?r.arrayBuffer():null).then(b=>{if(b)pdfBuf=b}).catch(()=>{});
+    i<set.questions.length?show():showWaiting();
+    jobPoll=setInterval(()=>fetchLive().catch(()=>{const e=$('#live-status');if(e)e.textContent='Reconnecting... saved questions remain playable.'}),5000);
+  }catch(e){app.innerHTML=`<div class="view">${brand}<h1>Could not load test</h1><p>${esc(e.message)}</p><a href="index.html">Back to tests</a></div>`}
+}
+
 // ---- upload view
 function uploadView(){
   paperFile=keyFile=null;
   app.innerHTML=`<div class="view">${brand}<h1>Paper to quiz</h1><p class="sub">Upload a question paper PDF. AI reads it and builds a playable quiz.</p>
   <button class="drop" id="dp"><span class="tag">Required</span><b>Question paper (PDF)</b><span>ALLEN / coaching test with the questions</span><span class="fn" id="fp"></span></button>
   <button class="drop" id="dk"><span class="tag" style="background:#3a3a2a;color:var(--cream)">Optional</span><b>Answer key / hint sheet (PDF)</b><span>Add it for exact answers and official solutions</span><span class="fn" id="fk"></span></button>
+  <label class="note" for="jobtitle">Test name</label><input class="numin" id="jobtitle" maxlength="120" placeholder="Use paper filename">
+  <div class="warn">Uploads appear in Community tests for everyone, including the original PDF. Do not upload private papers or personal information.</div>
   <div class="err" id="er"></div>
-  <p class="note">Free converter - up to ~3 MB of PDFs at a time. Full papers are read one page at a time and may take several minutes. Keep this tab open. Completed pages are saved on this device so you can resume if interrupted; the quiz is playable right here after conversion.</p>
-  </div><div class="foot"><button class="btn" id="go" disabled>Convert to quiz</button><button class="btn ghost" id="hm">Back to sets</button></div>`;
+  <p class="note">Free converter - up to ~3 MB of PDFs at a time. After upload, your test appears in the list and keeps building on the home server, even if you leave this page. Start solving as soon as questions are ready. Internet and the home server are needed while building.</p>
+  </div><div class="foot"><button class="btn" id="go" disabled>Upload and build quiz</button><button class="btn ghost" id="hm">Back to sets</button></div>`;
   $('#hm').onclick=()=>location.href='index.html';
   const pick=(inp,cb)=>{const i=document.createElement('input');i.type='file';i.accept='application/pdf';i.style.position='fixed';i.style.left='-9999px';document.body.appendChild(i);i.onchange=()=>{cb(i.files[0]);setTimeout(()=>i.remove(),1000)};i.click()};
   $('#dp').onclick=()=>pick(0,f=>{paperFile=f;$('#fp').textContent=f?f.name+' ('+(f.size/1048576).toFixed(1)+' MB)':'';ready()});
   $('#dk').onclick=()=>pick(0,f=>{keyFile=f;$('#fk').textContent=f?f.name+' ('+(f.size/1048576).toFixed(1)+' MB)':'';ready()});
-  $('#go').onclick=()=>convert(false);
+  $('#go').onclick=submitBackground;
   idb.get('conversion-job').then(job=>{if(!job)return;const b=document.createElement('button');b.className='btn ghost';b.textContent='Resume saved conversion ('+(job.finished??job.next)+'/'+job.total+' pages)';b.onclick=()=>convert(true);$('#go').after(b)}).catch(()=>{});
   function ready(){$('#go').disabled=!paperFile}
 }
@@ -311,6 +372,7 @@ function show(){
   <div id="ex"></div></div></div><div class="credit">DOOMSAGE</div></div>
   <div class="foot" id="ft"><button class="btn" id="nx" ${q.numeric?'':'style="display:none"'}>${q.numeric?'Check answer':(i+1<n?'Next question →':'See score')}</button></div>`;
   tex();
+  paintLive();
   startQ();
   $('#inv').onclick=()=>{inv=!inv;try{localStorage.setItem('dq-inv',inv?'1':'0')}catch(e){}document.querySelector('.qa').classList.toggle('inv',inv)};
   requestAnimationFrame(()=>{document.querySelector('.bar div').style.width=(i+1)/n*100+'%'});
@@ -325,9 +387,9 @@ function show(){
   }
 }
 function homeConfirm(){clearInterval(tick);communityMode?location.href='index.html':preview()}
-function next(){i++;window.scrollTo(0,0);i<set.questions.length?show():done()}
+function next(){i++;saveLiveAttempt();window.scrollTo(0,0);if(jobId&&i>=set.questions.length&&liveJob.status!=='complete')return showWaiting();i<set.questions.length?show():done()}
 function pick(k){
-  if(locked)return;locked=true;stopQ();const q=set.questions[i];ans[i]=k;
+  if(locked)return;locked=true;stopQ();const q=set.questions[i];ans[i]=k;saveLiveAttempt();
   document.querySelectorAll('.opt').forEach((b,j)=>{b.disabled=true;if(j===q.answer)b.classList.add('ok');else if(j===k)b.classList.add('bad')});
   if(navigator.vibrate)navigator.vibrate(k===q.answer?25:[40,30,40]);
   $('#ex').innerHTML=`<div class="exp"><b>${k===q.answer?'Correct.':'Wrong. Answer: '+L[q.answer]+'.'}</b> ${esc(q.explain)}</div>`;tex();
@@ -337,7 +399,7 @@ function pick(k){
 function numOk(v,a){const x=parseFloat(v),y=parseFloat(a);if(isNaN(x)||isNaN(y))return String(v).trim()===String(a).trim();const t=Math.max(0.011,Math.abs(y)*0.005);return Math.abs(x-y)<=t}
 function checkNum(){
   if(locked)return;const inp=$('#numin');const v=inp.value.trim();if(!v)return inp.focus();
-  locked=true;stopQ();const q=set.questions[i];const ok=numOk(v,q.answer_value);ans[i]={v,ok};
+  locked=true;stopQ();const q=set.questions[i];const ok=numOk(v,q.answer_value);ans[i]={v,ok};saveLiveAttempt();
   inp.disabled=true;inp.classList.add(ok?'ok':'bad');
   if(navigator.vibrate)navigator.vibrate(ok?25:[40,30,40]);
   $('#ex').innerHTML=`<div class="exp"><b>${ok?'Correct.':'Wrong. Answer: '+esc(q.answer_value)+'.'}</b> ${esc(q.explain)}</div>`;tex();
@@ -353,7 +415,7 @@ function done(){
   <p class="msg">${m}</p>${report(okOf)}<h1 style="font-size:16px;letter-spacing:.14em;color:var(--gold);margin:22px 0 10px">FULL REVIEW</h1>`+
   set.questions.map((q,j)=>{const ok=okOf(j);const you=q.numeric?(ans[j]?'You wrote '+esc(ans[j].v)+', answer '+esc(q.answer_value):'Skipped, answer '+esc(q.answer_value)):(ans[j]!=null?'You chose '+L[ans[j]]+', answer '+L[q.answer]:'Skipped, answer '+L[q.answer]);
     return `<div class="rv ${ok?'ok':'bad'}"><div class="d">${ok?'✓':'✕'}</div><div><b>Q${j+1}</b> · ${esc(q.badge)}<small>${you} · ${fmtT(times[j])}</small><div class="more"><p>${esc(q.q)}</p>${q.numeric?`<p><b style="color:var(--gold)">Answer: ${esc(q.answer_value)}</b></p>`:`<p><b style="color:var(--gold)">${L[q.answer]}.</b> ${esc(q.options[q.answer])}</p>`}<p>${esc(q.explain)}</p></div></div></div>`}).join('')+
-  '<div style="height:10px"></div><button class="btn" id="re" style="position:static">Retry</button>'+(communityMode&&!isDl?'<button class="btn ghost" id="of">Save for offline</button>':'')+(communityMode?'':'<button class="btn ghost" id="pv">Back to paper</button>')+'<button class="btn ghost" id="hm">All sets</button><div class="credit">DOOMSAGE</div></div>';
+  '<div style="height:10px"></div><button class="btn" id="re" style="position:static">Retry</button>'+(communityMode&&!isDl&&!jobId?'<button class="btn ghost" id="of">Save for offline</button>':'')+(communityMode?'':'<button class="btn ghost" id="pv">Back to paper</button>')+'<button class="btn ghost" id="hm">All sets</button><div class="credit">DOOMSAGE</div></div>';
   tex();
   setTimeout(()=>{$('#pr').style.strokeDashoffset=C*(1-s/n)},80);
   document.querySelectorAll('.rv').forEach(r=>r.onclick=()=>r.classList.toggle('open'));
@@ -366,6 +428,7 @@ $('#zm').onclick=()=>{$('#zm').style.display='none'};
 
 // ---- deep links: community play (?play=id) or a saved set (?set=id)
 (async()=>{
+  if(jobId){await startLive();return}
   const playId=new URLSearchParams(location.search).get('play');
   if(playId){
     app.innerHTML=`<div class="view">${brand}<div style="text-align:center;padding-top:40px"><div class="spin"></div><p class="sub">Loading community test from the home server...</p></div></div>`;
