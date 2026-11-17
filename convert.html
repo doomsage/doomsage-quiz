@@ -192,10 +192,10 @@ function showWaiting(){
 async function startLive(){
   app.innerHTML=`<div class="view">${brand}<p class="sub">Loading your building test...</p></div>`;
   try{
-    await fetchLive();communityMode=true;communityId=null;
+    await fetchLive();communityMode=true;communityId=jobId;pubCreated=new Date((liveJob.created||Date.now()/1000)*1000).toISOString();
     try{const a=JSON.parse(localStorage.getItem('dq-attempt-'+jobId)||'null');if(a){i=a.i||0;ans=a.ans||[];times=a.times||[]}}catch(e){}
     // Only restore answered positions. An unanswered current question starts fresh.
-    i=Math.min(i,set.questions.length);startTime=Date.now();
+    if(ans[i]!=null)i++;i=Math.min(i,set.questions.length);startTime=Date.now();
     fetch(API+'/jobs/'+jobId+'/pdf').then(r=>r.ok?r.arrayBuffer():null).then(b=>{if(b)pdfBuf=b}).catch(()=>{});
     i<set.questions.length?show():showWaiting();
     jobPoll=setInterval(()=>fetchLive().catch(()=>{const e=$('#live-status');if(e)e.textContent='Reconnecting... saved questions remain playable.'}),5000);
@@ -423,7 +423,7 @@ function done(){
   <p class="msg">${m}</p>${report(okOf)}<h1 style="font-size:16px;letter-spacing:.14em;color:var(--gold);margin:22px 0 10px">FULL REVIEW</h1>`+
   set.questions.map((q,j)=>{const ok=okOf(j);const you=q.numeric?(ans[j]?'You wrote '+esc(ans[j].v)+', answer '+esc(q.answer_value):'Skipped, answer '+esc(q.answer_value)):(ans[j]!=null?'You chose '+L[ans[j]]+', answer '+L[q.answer]:'Skipped, answer '+L[q.answer]);
     return `<div class="rv ${ok?'ok':'bad'}"><div class="d">${ok?'✓':'✕'}</div><div><b>Q${j+1}</b> · ${esc(q.badge)}<small>${you} · ${fmtT(times[j])}</small><div class="more"><p>${esc(q.q)}</p>${q.numeric?`<p><b style="color:var(--gold)">Answer: ${esc(q.answer_value)}</b></p>`:`<p><b style="color:var(--gold)">${L[q.answer]}.</b> ${esc(q.options[q.answer])}</p>`}<p>${esc(q.explain)}</p></div></div></div>`}).join('')+
-  '<div style="height:10px"></div><button class="btn" id="re" style="position:static">Retry</button>'+(communityMode&&!isDl&&!jobId?'<button class="btn ghost" id="of">Save for offline</button>':'')+(communityMode?'':'<button class="btn ghost" id="pv">Back to paper</button>')+'<button class="btn ghost" id="hm">All sets</button><div class="credit">DOOMSAGE</div></div>';
+  '<div style="height:10px"></div><button class="btn" id="re" style="position:static">Retry</button>'+(communityMode&&!isDl&&(!jobId||liveJob.status==='complete')?'<button class="btn ghost" id="of">Save for offline</button>':'')+(communityMode?'':'<button class="btn ghost" id="pv">Back to paper</button>')+'<button class="btn ghost" id="hm">All sets</button><div class="credit">DOOMSAGE</div></div>';
   tex();
   setTimeout(()=>{$('#pr').style.strokeDashoffset=C*(1-s/n)},80);
   document.querySelectorAll('.rv').forEach(r=>r.onclick=()=>r.classList.toggle('open'));
