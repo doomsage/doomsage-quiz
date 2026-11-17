@@ -148,40 +148,62 @@ function uploadView(){
   <button class="drop" id="dp"><span class="tag">Required</span><b>Question paper (PDF)</b><span>ALLEN / coaching test with the questions</span><span class="fn" id="fp"></span></button>
   <button class="drop" id="dk"><span class="tag" style="background:#3a3a2a;color:var(--cream)">Optional</span><b>Answer key / hint sheet (PDF)</b><span>Add it for exact answers and official solutions</span><span class="fn" id="fk"></span></button>
   <div class="err" id="er"></div>
-  <p class="note">Free converter - up to ~3 MB of PDFs at a time. Big papers can take up to a minute. Everything happens inside this page; the quiz is playable right here after conversion.</p>
+  <p class="note">Free converter - up to ~3 MB of PDFs at a time. Full papers are read one page at a time and may take several minutes. Keep this tab open. Completed pages are saved on this device so you can resume if interrupted; the quiz is playable right here after conversion.</p>
   </div><div class="foot"><button class="btn" id="go" disabled>Convert to quiz</button><button class="btn ghost" id="hm">Back to sets</button></div>`;
   $('#hm').onclick=()=>location.href='index.html';
   const pick=(inp,cb)=>{const i=document.createElement('input');i.type='file';i.accept='application/pdf';i.style.position='fixed';i.style.left='-9999px';document.body.appendChild(i);i.onchange=()=>{cb(i.files[0]);setTimeout(()=>i.remove(),1000)};i.click()};
   $('#dp').onclick=()=>pick(0,f=>{paperFile=f;$('#fp').textContent=f?f.name+' ('+(f.size/1048576).toFixed(1)+' MB)':'';ready()});
   $('#dk').onclick=()=>pick(0,f=>{keyFile=f;$('#fk').textContent=f?f.name+' ('+(f.size/1048576).toFixed(1)+' MB)':'';ready()});
-  $('#go').onclick=convert;
+  $('#go').onclick=()=>convert(false);
+  idb.get('conversion-job').then(job=>{if(!job)return;const b=document.createElement('button');b.className='btn ghost';b.textContent='Resume saved conversion ('+job.next+'/'+job.total+' pages)';b.onclick=()=>convert(true);$('#go').after(b)}).catch(()=>{});
   function ready(){$('#go').disabled=!paperFile}
 }
 function fail(msg){const e=$('#er');if(e){e.textContent=msg;e.style.display='block'}else{alert(msg)}}
 
-async function convert(){
-  if(!paperFile)return;
-  const tot=paperFile.size+(keyFile?keyFile.size:0);
-  if(tot>MAX)return fail('Too large ('+(tot/1048576).toFixed(1)+' MB). The free converter takes about 3 MB at a time - split the PDF or compress it.');
-  app.innerHTML=`<div class="view">${brand}<div style="text-align:center;padding-top:40px"><div class="spin"></div>
-  <h1 style="font-size:22px">Reading your paper...</h1><p class="sub" id="st">AI is finding each question, its options, equations and diagrams.</p></div></div>`;
+// Progress and original PDFs stay private in this browser until Publish is pressed.
+async function convert(resume=false){
+  if(!resume&&!paperFile)return;
+  let job;
   try{
-    const rd=f=>new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(',')[1]);r.onerror=rej;r.readAsDataURL(f)});
-    const files=[{name:paperFile.name,kind:'paper',data:await rd(paperFile)}];
-    if(keyFile)files.push({name:keyFile.name,kind:'key',data:await rd(keyFile)});
-    $('#st').textContent='Paper read. AI is segmenting questions and building the quiz (can take up to a minute)...';
-    const ctrl=new AbortController();const to=setTimeout(()=>ctrl.abort(),75000);
-    const r=await fetch('/api/convert',{method:'POST',headers:{'Content-Type':'application/json'},signal:ctrl.signal,body:JSON.stringify({files})});
-    clearTimeout(to);
-    const j=await r.json().catch(()=>null);
-    if(!j)return fail('Bad reply from the converter. Try again.')||uploadView();
-    if(!j.ok){uploadView();return fail(j.error||'Conversion failed. Try again.')}
-    set=j.set;pdfBuf=await paperFile.arrayBuffer();pdfDoc=null;
-    publishView();
-  }catch(e){
-    uploadView();
-    fail(e.name==='AbortError'?'The AI took too long on this paper. Split it into fewer pages and try again.':'Conversion failed: '+(e.message||e));
-  }
+    if(resume){job=await idb.get('conversion-job');if(!job)throw Error('No saved conversion found.')}
+    else{
+      if(paperFile.size+(keyFile?keyFile.size:0)>MAX)return fail('The combined PDFs must be under 3 MB. Compress the PDFs and retry.');
+      job={paper:await paperFile.arrayBuffer(),key:keyFile?await keyFile.arrayBuffer():null,name:paperFile.name,keyName:keyFile?.name,next:0,total:0,questions:[],title:'My paper',subject:'General'};
+    }
+    paperFile=new File([job.paper],job.name,{type:'application/pdf'});
+    keyFile=job.key?new File([job.key],job.keyName,{type:'application/pdf'}):null;
+    app.innerHTML=`<div class="view">${brand}<div style="text-align:center;padding-top:40px"><div class="spin"></div><h1 style="font-size:22px">Reading your paper...</h1><p class="sub" id="st">Preparing page-by-page conversion...</p><p class="note">Keep this tab open. Completed pages are saved on this device. If interrupted, return here and tap Resume.</p><div class="sjb"><div id="cp" style="width:0%"></div></div></div></div>`;
+    if(!window.pdfjsLib)throw Error('PDF tools did not load. Check your internet and retry.');
+    const doc=await pdfjsLib.getDocument({data:job.paper.slice(0)}).promise;job.total=doc.numPages;
+    if(!job.total||job.total>150)throw Error('Please use a PDF with 1 to 150 pages.');
+    await idb.put('conversion-job',job);
+    const to64=bytes=>{let s='';for(let k=0;k<bytes.length;k+=32768)s+=String.fromCharCode(...bytes.subarray(k,k+32768));return btoa(s)};
+    // Keep the complete source as read-only context so embedded answer keys and
+    // cross-page questions are available, but generate only one page per request.
+    const pages=Array.from({length:job.total},(_,p)=>p+1);
+    const files=[{kind:'paper',name:job.name,data:to64(new Uint8Array(job.paper))}];
+    if(job.key)files.push({kind:'key',name:job.keyName,data:to64(new Uint8Array(job.key))});
+    for(let n=job.next;n<job.total;n++){
+      $('#st').textContent=Math.round(n/job.total*100)+'% complete - page '+(n+1)+' of '+job.total+' - '+job.questions.length+' questions saved';
+      $('#cp').style.width=(n/job.total*100)+'%';
+      let result;
+      for(let attempt=0;attempt<3;attempt++){
+        if(attempt){$('#st').textContent='Retrying page '+(n+1)+' of '+job.total+' - completed pages are safe';await new Promise(r=>setTimeout(r,attempt*6000))}
+        try{
+          const r=await fetch('/api/convert',{method:'POST',headers:{'Content-Type':'application/json'},signal:AbortSignal.timeout(58000),body:JSON.stringify({files,batch:{page:n+1,pages,subject:job.subject}})});
+          const j=await r.json().catch(()=>null);
+          if(!j?.ok){const e=Error(j?.error||'The converter is temporarily unavailable.');e.terminal=r.status===400||r.status===413||j?.no_paper;throw e}
+          result=j.set;break;
+        }catch(e){if(e.terminal||attempt===2)throw e}
+      }
+      for(const q of result.questions){q.page=n+1;job.questions.push(q);job.subject=String(q.badge).split(' - ')[0]}
+      if(result.title&&result.title!=='My paper')job.title=result.title;
+      job.next=n+1;await idb.put('conversion-job',job);$('#cp').style.width=(job.next/job.total*100)+'%';$('#st').textContent=Math.round(job.next/job.total*100)+'% complete - '+job.next+'/'+job.total+' pages saved';
+    }
+    if(!job.questions.length)throw Error('No question starts were found. Check that this is the question paper, not only a key.');
+    set={id:'paper-'+Date.now().toString(36),title:job.title,subtitle:[...new Set(job.questions.map(q=>String(q.badge).split(' - ')[0]))].join(' + '),latex:true,count:job.questions.length,questions:job.questions};
+    pdfBuf=job.paper;pdfDoc=null;publishView();
+  }catch(e){uploadView();fail((e.message||'Conversion interrupted.')+' Completed pages are saved. Tap Resume saved conversion to continue.');}
 }
 
 // ---- publish view (compulsory: every converted paper goes to the community library)
@@ -210,7 +232,7 @@ async function publish(){
     const r=await fetch(API+'/quizzes',{method:'POST',body:fd,signal:AbortSignal.timeout(40000)});
     const j=await r.json().catch(()=>null);
     if(!r.ok||!j||!j.id)throw Error((j&&(j.message||j.error))||'The home server refused the upload.');
-    communityId=j.id;pubCreated=j.created||new Date().toISOString();set.title=ttl;
+    await idb.del('conversion-job','pdfs').catch(()=>{});communityId=j.id;pubCreated=j.created||new Date().toISOString();set.title=ttl;
     preview(true);
   }catch(e){
     btn.disabled=false;btn.textContent='Retry publish';
@@ -331,7 +353,7 @@ $('#zm').onclick=()=>{$('#zm').style.display='none'};
       const j=await r.json().catch(()=>null);
       if(!r.ok||!j||!j.quiz)throw Error('not found');
       set={id:j.id,title:j.quiz.title||j.title,latex:true,questions:j.quiz.questions};
-      communityMode=true;communityId=j.id;pubCreated=j.created||'';
+      communityMode=true;await idb.del('conversion-job','pdfs').catch(()=>{});communityId=j.id;pubCreated=j.created||'';
       if(j.source_pdf){try{const pr=await fetch(API+'/files/quizzes/'+j.id+'/'+j.source_pdf,{signal:AbortSignal.timeout(40000)});if(pr.ok)pdfBuf=await pr.arrayBuffer()}catch(e){}}
       fetch(API+'/quizzes/'+j.id+'/play',{method:'POST'}).catch(()=>{});
       i=0;ans=[];times=[];startTime=Date.now();show();return
@@ -367,4 +389,3 @@ $('#zm').onclick=()=>{$('#zm').style.display='none'};
   uploadView();
 })();
 </script></body></html>
-
