@@ -200,7 +200,7 @@ async function convert(resume=false){
       for(let attempt=0;attempt<3;attempt++){
         if(attempt){$('#st').textContent='Retrying page '+(n+1)+' of '+job.total+' - completed pages are safe';await new Promise(r=>setTimeout(r,attempt*6000))}
         try{
-          const r=await fetch('/api/convert',{method:'POST',headers:{'Content-Type':'application/json'},signal:AbortSignal.timeout(58000),body:JSON.stringify({files,batch:{page:n+1,pages,subject:job.subject}})});
+          const r=await fetch('/api/convert',{method:'POST',headers:{'Content-Type':'application/json'},signal:AbortSignal.timeout(280000),body:JSON.stringify({files,batch:{page:n+1,pages,subject:job.subject}})});
           const j=await r.json().catch(()=>null);
           if(!j?.ok){const e=Error(j?.error||'The converter is temporarily unavailable.');e.terminal=r.status===400||r.status===413||j?.no_paper;throw e}
           result=j.set;break;
