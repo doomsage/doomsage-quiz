@@ -361,10 +361,16 @@ async function saveOffline(btn){
 }
 
 // ---- quiz player
+async function toggleFullscreen(){
+  try{
+    if(document.fullscreenElement||document.webkitFullscreenElement){const exit=document.exitFullscreen||document.webkitExitFullscreen;if(exit)await exit.call(document)}
+    else{const el=document.documentElement;const enter=el.requestFullscreen||el.webkitRequestFullscreen;if(!enter)return alert('This browser does not support full screen. Use Add to Home Screen in the browser menu for an app-like view.');await enter.call(el)}
+  }catch(e){alert('Full screen is unavailable in this browser. Try opening this page directly in Chrome, or use Add to Home Screen.')}
+}
 function show(){
   locked=false;const q=set.questions[i],n=set.questions.length;
   const letters=L.slice(0,q.options?q.options.length:0);
-  app.innerHTML=`<div class="view"><div class="top"><button class="x" id="quit">✕</button><div class="bar"><div style="width:${i/n*100}%"></div></div><div class="sw" id="sw">0:00</div><button class="x" id="inv" title="Swap question and options">⇅</button><div class="cnt">${i+1}/${n}</div></div>
+  app.innerHTML=`<div class="view"><div class="top"><button class="x" id="quit">✕</button><div class="bar"><div style="width:${i/n*100}%"></div></div><div class="sw" id="sw">0:00</div><button class="x" id="inv" title="Swap question and options">⇅</button><button class="x" id="fullscreen" title="Toggle full screen" aria-label="Toggle full screen">⛶</button><div class="cnt">${i+1}/${n}</div></div>
   <div class="qa${inv?' inv':''}"><div class="qblk"><span class="badge">${esc(q.badge)}</span><p class="q">${esc(q.q)}</p>
   ${q.figure&&q.page?`<button class="figbtn" id="fig">See figure (page ${q.page})</button>`:''}
 </div><div class="oblk">
@@ -375,6 +381,7 @@ function show(){
   tex();
   paintLive();
   startQ();
+  $('#fullscreen').onclick=toggleFullscreen;
   $('#inv').onclick=()=>{inv=!inv;try{localStorage.setItem('dq-inv',inv?'1':'0')}catch(e){}document.querySelector('.qa').classList.toggle('inv',inv)};
   requestAnimationFrame(()=>{document.querySelector('.bar div').style.width=(i+1)/n*100+'%'});
   $('#quit').onclick=homeConfirm;
