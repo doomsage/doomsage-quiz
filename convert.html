@@ -80,6 +80,7 @@ h1{font-size:30px;margin:0 0 6px;line-height:1.15}
 <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
 <script>
 if(window.pdfjsLib)pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 const $=s=>document.querySelector(s),app=$('#app');
@@ -178,14 +179,23 @@ async function convert(resume=false){
     if(!job.total||job.total>150)throw Error('Please use a PDF with 1 to 150 pages.');
     await idb.put('conversion-job',job);
     const to64=bytes=>{let s='';for(let k=0;k<bytes.length;k+=32768)s+=String.fromCharCode(...bytes.subarray(k,k+32768));return btoa(s)};
-    // Keep the complete source as read-only context so embedded answer keys and
-    // cross-page questions are available, but generate only one page per request.
-    const pages=Array.from({length:job.total},(_,p)=>p+1);
-    const files=[{kind:'paper',name:job.name,data:to64(new Uint8Array(job.paper))}];
-    if(job.key)files.push({kind:'key',name:job.keyName,data:to64(new Uint8Array(job.key))});
+    if(!window.PDFLib)throw Error('PDF splitter did not load. Check your internet and retry.');
+    const source=await PDFLib.PDFDocument.load(job.paper.slice(0));
+    // Locate embedded keys where text is available. Include the final two pages
+    // as well, including scanned keys, plus headings and cross-page context.
+    const keyPages=[];
+    for(let p=1;p<=job.total;p++){
+      const text=(await (await doc.getPage(p)).getTextContent()).items.map(x=>x.str).join(' ');
+      if(/answer\s*(key|sheet)|hints?\s*(and|&)\s*solutions?|correct\s*options?/i.test(text))keyPages.push(p-1);
+    }
     for(let n=job.next;n<job.total;n++){
       $('#st').textContent=Math.round(n/job.total*100)+'% complete - page '+(n+1)+' of '+job.total+' - '+job.questions.length+' questions saved';
       $('#cp').style.width=(n/job.total*100)+'%';
+      const indexes=[...new Set([0,Math.max(0,n-1),n,Math.min(job.total-1,n+1),...keyPages,Math.max(0,job.total-2),job.total-1])].sort((a,b)=>a-b);
+      const excerpt=await PDFLib.PDFDocument.create();for(const p of await excerpt.copyPages(source,indexes))excerpt.addPage(p);
+      const pages=indexes.map(p=>p+1);
+      const files=[{kind:'paper',name:job.name,data:to64(await excerpt.save())}];
+      if(job.key)files.push({kind:'key',name:job.keyName,data:to64(new Uint8Array(job.key))});
       let result;
       for(let attempt=0;attempt<3;attempt++){
         if(attempt){$('#st').textContent='Retrying page '+(n+1)+' of '+job.total+' - completed pages are safe';await new Promise(r=>setTimeout(r,attempt*6000))}
